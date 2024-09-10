@@ -1,0 +1,521 @@
+from customtkinter import*
+from PIL import Image, ImageTk
+from tkinter import ttk   #treeview
+import pyodbc
+from tkinter import messagebox, END, Toplevel
+
+name=None
+
+#************************PROFILE**************************************
+
+def profile():
+    global name
+    ent = e1.get()
+    name = str.title(ent)
+    if name == 'Sufia':
+        con = pyodbc.connect(r"DRIVER={Microsoft Access Driver (*.mdb, *.accdb)};DBQ=d:\PL project\project2.accdb;")
+    elif name == 'Asma':
+        con = pyodbc.connect(r"DRIVER={Microsoft Access Driver (*.mdb, *.accdb)};DBQ=d:\PL project\project.accdb;")
+    else:
+        messagebox.showinfo(title='Error', message='Profile does not exist')
+
+    con.autocommit = True
+    app(con)
+
+
+
+def app(con):
+    #*****************************MAIN WINDOW*************************************************************************************
+    mashle.iconify()
+    def main_window():
+        root.iconify()
+        ##***************RESULT GIVER*******************
+        def result():
+            global user_input
+            user_input = e1.get()
+            global x
+            x={}
+
+            cursor1 = con.cursor()
+            cursor1.execute("SELECT Ingredient_name FROM ingredients WHERE [food_name] = ?", user_input)
+            cursor2 = con.cursor()
+            cursor2.execute("SELECT Allergen_name FROM allergy")
+
+            global thing1
+            thing1 = cursor1.fetchall()
+            thing2 = cursor2.fetchall()
+            #list of ingredient of input
+            ingredient = []
+            for row in thing1:
+                ingredient.append(row.Ingredient_name)
+            #list of all allergens
+            allergen = []
+            for row in thing2:
+                allergen.append(row.Allergen_name)
+
+            ###ACTUAL ALLERGEN DETECTING PART
+            if len(ingredient) == 0:    #if food or ingredient does not exist in database
+                l3.configure(text='No info regarding food or allergen')
+                l5.configure(text=':(')
+                messagebox.showinfo(title='BUMMER', message='WE DO NOT KNOW IF IT IS SAFE OR NOT')
+
+            else:
+                ingredient_lower = set(map(str.lower, ingredient))
+                allergens_lower = set(map(str.lower, allergen))
+                #intersection of ingredients and all allergen
+                x = ingredient_lower & allergens_lower
+
+                if len(x)>0:   #if common element bw allergen and ingredient exists
+                    l3.configure(text='ALLERGIC!',)
+                    l5.configure(text=ingredient)
+                    messagebox.showinfo(title='WARNING', message='DO NOT EAT AS IT MAY HARM YOU')
+
+                elif len(x)==0:
+                    history(user_input, l_input)
+                    l3.configure(text='Not allergic')
+                    l5.configure(text=':)')
+                    messagebox.showinfo(title='CONGRATS', message='YOU ARE NOT ALLERGIC! EAT SAFELY!')
+
+        ##**********************HISTORY*******************
+
+         # Global variable to store the count of day
+        num=[]
+        l_input = []
+        def history(user_input,l_input):
+
+            l_input.append(user_input)
+            hist = {'Breakfast': None, 'Lunch': None, 'Dinner': None}
+            if len(l_input) == 3:
+                hist['Breakfast'] = str.title(l_input[0])
+                hist['Lunch'] = str.title(l_input[1])
+                hist['Dinner'] = str.title(l_input[2])
+                num.extend(l_input)
+                n = int(len(num)/3)
+                day_info = f'Day {n}:\n' + f'Breakfast: {hist["Breakfast"]}, Lunch: {hist["Lunch"]}, Dinner: {hist["Dinner"]}\n'
+                h1.configure(state='normal')  # Set state to normal to allow modifications
+                h1.insert(END, day_info, '\t')
+                h1.configure(state='disabled') # Set state back to disabled
+
+                l_input.clear()
+
+        #********************DESCRIPTION***********************
+        def desc(x,user_input,thing1):
+            x1 = tuple(x)
+            cursor3 = con.cursor()
+            if len(x) > 0:
+                severity_info="Unfortunately, you have a"
+                for i in x1:
+                    cursor3.execute("SELECT severity FROM allergy WHERE [Allergen_name]=?",i)
+                    data = cursor3.fetchone()
+                    if data:
+                        severity = data.severity  #now we know what severity is
+                        severity_info = severity_info + f" {severity} allergy to {i},"
+                severity_info = severity_info + f" which is contained in {str.lower(user_input)}."
+            elif len(thing1)==0:
+                severity_info = f"We have no information regarding {str.lower(user_input)}. You are advised to avoid such uncertain foods"
+            elif len(x)==0:
+                severity_info = f"Fortunately, you are not allergic to any ingredient in {str.lower(user_input)}. Enjoy your meal!"
+
+            h2.configure(state='normal')
+            h2.delete(1.0, END)
+            h2.insert(END, severity_info, '\t')
+            h2.configure(state='disabled')
+
+        def get_details(): #idk why it kept saying positional argument blah blah
+            desc(x, user_input,thing1)
+
+        def clear_entrybox():
+            e1.delete(0, 'end')
+            l3.configure(text='')
+            l5.configure(text='')
+            h2.configure(state='normal')
+            h2.delete(1.0, END)
+            h2.configure(state='disabled')
+
+        # **************MAIN WINDOW GUI******************
+        app = Toplevel(root)
+        # app.geometry("400*300")
+        app.title(f"{name}'s allergy app")
+
+        f1= CTkFrame(master=app, corner_radius=0,fg_color="darkseagreen")
+        f1.pack(side='left',fill="both",expand=True)
+
+        image_path = "D:/PL project/untitled2.png"
+        pil_image = Image.open(image_path)
+        tk_image = ImageTk.PhotoImage(pil_image)
+        background_label = CTkLabel(master=f1, image=tk_image)
+        background_label.place(relwidth=1, relheight=1)
+
+        f2= CTkFrame(master=app, corner_radius=20,bg_color="white",fg_color="white")
+        f2.pack(side='right',fill="both",expand=True)
+        f3=CTkFrame(master=f2,corner_radius=0, fg_color='lightgrey')
+        f3.pack(side='top',fill='both',expand=True)
+        f4=CTkFrame(master=f2,corner_radius=0, fg_color='lightgrey')
+        f4.pack(side='bottom',pady=0,fill='both',expand=True)
+        l1 =CTkLabel(master=f1,text="WELCOME!",text_color='white',corner_radius=20,fg_color='palegreen4',bg_color='darkolivegreen',font=("Arial",70,'bold'))
+        l1.pack(side='top',padx=20,pady=40)
+        l8 =CTkLabel(master=f1,text="FOOD",corner_radius=10, text_color='white',fg_color='palegreen4',bg_color='darkolivegreen',font=("Arial",30,'bold'),width=150,height=10)
+        l8.pack(padx=15,pady=1)
+        e1 =CTkEntry(master=f1,placeholder_text="Enter food name",fg_color='snow1', text_color='darkolivegreen',bg_color='darkolivegreen',font=("Arial",20,'bold','italic')
+                     ,corner_radius=20,width=300, height=90)
+        e1.pack(padx=5)
+        l2 =CTkLabel(master=f1,text="VERDICT", text_color='white',fg_color='palegreen4',bg_color='darkolivegreen',corner_radius=10,font=("Arial",30,'bold'),width=150,
+                     height=10)
+        l2.pack(padx=15,pady=1)
+        l3= CTkLabel(master=f1, text="",corner_radius=20,text_color='darkolivegreen', fg_color='bisque',bg_color='darkolivegreen', font=("Arial",23,'bold'),width=300,
+                     height=80)
+        l3.pack(padx=15,pady=10)   ##ISMAIN VERDICT AYEGA
+        l4 =  CTkLabel(master=f1,text="INGREDIENTS", text_color='white',fg_color='palegreen4',bg_color='darkolivegreen',corner_radius=10,font=("Arial",30,'bold'))
+        l4.pack(padx=15,pady=1)
+        l5= CTkLabel(master=f1,text="",fg_color='bisque', text_color='darkolivegreen',corner_radius=20,bg_color='darkolivegreen',font=("Arial",20,'bold'),width=300,
+                     height=100)
+        l5.pack(padx=5,pady=5)      ##IS MAIN INGREDIENTS AYENGAY
+        l6 =  CTkLabel(master=f4,text="HISTORY:",corner_radius=8,text_color='seagreen',font=("Arial",40,'bold'),width=20,height=20)
+        l6.pack(side='top')
+        l7 =  CTkLabel(master=f3,text="DETAILS",corner_radius=8,text_color='seagreen',font=("Arial",50,'bold'),width=20)
+        l7.pack(padx=20,pady=20)
+        h2 =  CTkTextbox(master=f3,width=700,height=200,wrap="word",fg_color="white",border_color='seagreen',border_width=4,text_color="seagreen",font=("Arial",30))
+        h2.pack(expand=True)  ##IS MAIN DESCRIPTION AYEGI
+        b1 =  CTkButton(master=f1,text="RESULT",corner_radius=8,font=("Arial",40,'bold'),fg_color='palegreen4',bg_color='darkolivegreen',width=300, height=80,
+                        command=result)
+        b1.pack(padx=20,pady=20)
+        h1 =  CTkTextbox(master=f4,width=700,height=300,fg_color="white",border_color='seagreen',border_width=4,text_color="seagreen",font=("Arial",24,'bold'))
+        h1.pack(expand=True)    ##IS MAIN HISTORY AYEGI
+        b2 =  CTkButton(master=f3, text="GET DETAILS", width=100, height=50, fg_color="seagreen", font=("Arial", 20),command=get_details)
+        b2.pack(side='bottom')
+        b3 = CTkButton(master=f1, text="CLEAR", width=100, height=50, fg_color="seagreen", font=("Arial", 20),
+                       command=clear_entrybox)
+        b3.pack(side='bottom',pady=15)
+
+        app.mainloop()
+    #***************************END OF FUNCTION*******************************
+
+
+    #*************************************************ALLERGY DATABASE**************************************
+
+    def a_database():
+
+        root.iconify() #minimize root window
+        cursor4 = con.cursor()
+        cursor4.execute("SELECT * FROM allergy ORDER BY Allergen_name")
+        all = []
+        sev = []
+
+        for row in cursor4.fetchall():
+            all.append(row.Allergen_name)
+            sev.append(row.Severity)
+
+        def new_row():
+            x = e1.get()
+            y = e2.get()
+            data = (str(x), str(y))
+            if not x:
+                messagebox.showinfo("Missing Input", "Please enter name of allergen.")
+            if not y:
+                messagebox.showinfo("Missing Input", "Please enter severity of allergen.")
+            else:
+                tree.insert("", 'end', values=(x, y))
+                cursor5 = con.cursor()
+                cursor5.execute("INSERT INTO Allergy (Allergen_name, Severity) VALUES (?, ?)", (x, y))
+                con.commit()
+                messagebox.showinfo(message="New row added successfully")
+
+        def delete_row():
+            select = tree.selection()   #select on mouse click
+            x = tree.item(select, 'values')[0]
+            tree.delete(select)
+            cursor5 = con.cursor()
+            cursor5.execute("DELETE FROM Allergy WHERE [Allergen_name] = ?", (x,))
+            con.commit()
+            messagebox.showinfo(message="Delete Successful")
+
+        def clear_entrybox():
+            e1.delete(0, 'end')
+            e2.delete(0,'end')
+
+         # *********GUI***********
+        r = Toplevel(root)
+        r.title(f"{name}'s Allergy database")
+
+        f1 = CTkFrame(master=r, corner_radius=0, fg_color="darkseagreen", width=400)
+        f1.pack(side='left', fill="both")
+
+        image_path = "D:/PL project/untitled2.png"
+        pil_image = Image.open(image_path)
+        tk_image = ImageTk.PhotoImage(pil_image)
+        background_label = CTkLabel(master=f1, image=tk_image)
+        background_label.place(relwidth=1, relheight=1)
+
+        f2 = CTkFrame(master=r, corner_radius=0, bg_color="grey", fg_color="palegreen4", width=1000)
+        f2.pack(side='right', fill="both", expand=True)
+        l1 = CTkLabel(master=f1, text=" ", corner_radius=8,width=1,fg_color='darkolivegreen',bg_color='darkolivegreen')
+        l1.pack(side='top', padx=20, pady=40)
+
+        l2 = CTkLabel(master=f1, text="ALLERGEN", text_color='white',corner_radius=5, fg_color='palegreen4',bg_color='darkolivegreen',
+                      font=("Arial", 30, 'bold'), width=150, height=10)
+        l2.pack(padx=15, pady=40)
+        e1 = CTkEntry(master=f1, placeholder_text="Enter allergen name", text_color='darkolivegreen', bg_color='darkolivegreen',fg_color='snow1',
+                      corner_radius=20, width=300, height=70,
+                      font=("Arial", 22, 'italic', 'bold'))
+        e1.pack(padx=60, pady=10)
+        l3 = CTkLabel(master=f1, text="SEVERITY", text_color='white', corner_radius=5, fg_color='palegreen4',bg_color='darkolivegreen', font=("Arial", 30, 'bold'),
+                      width=150, height=10)
+        l3.pack(padx=15, pady=1)
+        e2 = CTkEntry(master=f1, placeholder_text="Enter severity" ,text_color='darkolivegreen',fg_color='snow1',bg_color='darkolivegreen', corner_radius=20,
+                      width=300, height=70,
+                      font=("Arial", 22, 'italic', 'bold'))
+        e2.pack(padx=60, pady=10)
+        b1 = CTkButton(master=f1, text="ADD ROW", text_color='white', corner_radius=8, bg_color="darkolivegreen", fg_color="palegreen4", width=300,
+                       height=60, font=("Arial", 30, 'bold'), command=new_row)
+        b1.pack(padx=60, pady=10)
+        b2 = CTkButton(master=f1, text=" DELETE ROW ", text_color='white', corner_radius=8, bg_color="darkolivegreen", fg_color="palegreen4",
+                       width=300, height=60, font=("Arial", 30, 'bold'), command=delete_row)
+        b2.pack(padx=60, pady=10)
+        b3 = CTkButton(master=f1, text=" CLEAR ", text_color='white', corner_radius=8, bg_color="darkseagreen",
+                       fg_color="seagreen", width=250, height=60, font=("Arial", 30, 'bold'), command=clear_entrybox)
+        b3.pack(padx=60, pady=10)
+        l4 = CTkLabel(master=f2, text="ALLERGIES DATABASE", text_color='white', corner_radius=8, fg_color='palegreen4',font=("Arial", 40, 'bold'), width=1000,
+                      height=60)
+        l4.pack(padx=60, pady=10)
+
+
+        tree = ttk.Treeview(f2, selectmode='browse')
+        tree.pack(side='left', expand=True, fill='both')
+        treestyle = ttk.Style()
+        treestyle.theme_use('default')
+        treestyle.configure("Treeview", background='lightgrey', foreground='green', fieldbackground='lightgrey',borderwidth=0,
+                            font=("Arial", 25), rowheight=40)
+        treestyle.configure("Treeview.Heading", background='darkseagreen', font=("Arial", 30), columnheight=40,padding=(0, 30))
+        treestyle.map('Treeview', background=[('selected', 'darkseagreen')], foreground=[('selected', 'darkgreen')])
+
+        tree["columns"] = ('1', '2')
+        tree['show'] = 'headings'
+        tree.column("1", width=90, anchor='c')
+        tree.column("2", width=90, anchor='c')
+        tree.heading("1", text="ALLERGEN NAME")
+        tree.heading("2", text="SEVERITY")
+
+    ##populate the treeview
+        for x, y in zip(all, sev):
+            tree.insert("", 'end', values=(str.title(x), str.title(y)))
+
+        r.mainloop()
+
+    #*************END OF FUNCTION************************
+
+    #*********************************************FOOD DATABASE***********************************************************
+
+    def f_database():
+
+        root.iconify()
+        cursor4 = con.cursor()
+        cursor4.execute("SELECT Ingredient_name, food_name FROM ingredients ORDER BY food_name")
+        data = cursor4.fetchall()
+
+        food_dict = {}
+        for row in data:
+            ingredient = row.Ingredient_name
+            food = row.food_name
+            #prevent none type error
+            if ingredient is None or food is None:
+                continue
+            food = food.lower()
+            ingredient = ingredient.lower()
+
+            if food not in food_dict:
+                food_dict[food] = []
+
+            food_dict[food].append(ingredient)
+
+        # ****************FUNCTION********************
+        def new_food():
+            x = e1.get()
+            y = e2.get()
+            data = (str(x), str(y))
+            if not x:
+                messagebox.showinfo("Missing Input", "Please enter food.")
+            if not y:
+                messagebox.showinfo("Missing Input", "Please enter ingredient")
+            else:
+                food_name = x.lower()
+                ingredient_name = y.lower()
+                parent_item = tree.insert('', 'end', text=x, values=('',))    #add x to parent item
+                tree.insert(parent_item, 'end', text='', values=(y,))                #add y to child item
+                cursor5 = con.cursor()
+                cursor5.execute("INSERT INTO Ingredients (food_name, Ingredient_name) VALUES (?, ?)", (x, y))
+                con.commit()
+                messagebox.showinfo(message="New food added successfully")
+
+        def new_ingredient():
+            x = e1.get()
+            y = e2.get()
+            if not x:
+                messagebox.showinfo("Missing Input", "Please enter food.")
+            if not y:
+                messagebox.showinfo("Missing Input", "Please enter ingredient")
+            else:
+                food_name = x.lower()
+                ingredient_name = y.lower()
+                parent_item = None
+                for parent in tree.get_children(''):     #iterate over every element of treeview
+                    if tree.item(parent, 'text').lower() == food_name:     #if element is food name
+                        parent_item = parent
+                        break
+                if parent_item is None:      #if parent doesnt exist, its parent itself
+                    parent_item = tree.insert('', 'end', text=x, values=('',))            #insert into parent
+                tree.insert(parent_item, 'end', text='', values=(y,))                            #insert into child
+                cursor5 = con.cursor()
+                cursor5.execute("INSERT INTO Ingredients (food_name, Ingredient_name) VALUES (?, ?)", (x, y))
+                con.commit()
+                messagebox.showinfo(message="New ingredient added successfully")
+
+        def delete_food():
+            cursor5 = con.cursor()
+            select = tree.selection()
+
+            if select:
+                # Get the item's ID from selection
+                item_id = tree.item(select, 'text')
+
+                # Check if it's a parent (food_name) or child (ingredient_name)
+                parent_item = tree.parent(select)
+                if parent_item == "":
+                    # This is a parent item
+                    cursor5.execute("DELETE FROM Ingredients WHERE [food_name] = ?", (item_id,))
+                    messagebox.showinfo(message="Delete Successful")
+                con.commit()
+                tree.delete(select)
+
+        def clear_entrybox():
+            e1.delete(0, 'end')
+            e2.delete(0,'end')
+
+        # *****************GUI*********************
+        q = CTkToplevel(root)
+        q.title(f"{name}s Food Database")
+
+        f1 = CTkFrame(master=q, corner_radius=0, bg_color="grey", fg_color="darkseagreen", width=400)
+        f1.pack(side='left', fill="both")
+
+        image_path = "D:/PL project/untitled2.png"
+        pil_image = Image.open(image_path)
+        tk_image = ImageTk.PhotoImage(pil_image)
+        background_label = CTkLabel(master=f1, image=tk_image)
+        background_label.place(relwidth=1, relheight=1)
+
+        f2 = CTkFrame(master=q, corner_radius=0, bg_color="grey", fg_color="palegreen4", width=1000)
+        f2.pack(side='right', fill="both", expand=True)
+        l1 = CTkLabel(master=f1, text=" ", corner_radius=8, bg_color='darkolivegreen', font=("Arial", 70, 'bold'))
+        l1.pack(side='top', padx=20, pady=40)
+        l2 = CTkLabel(master=f1, text="FOOD", corner_radius=8, bg_color='darkolivegreen', fg_color='palegreen4',text_color='white',font=("Arial", 30, 'bold'),
+                      width=150, height=10)
+        l2.pack(padx=15, pady=1)
+        e1 = CTkEntry(master=f1, placeholder_text="Enter food name",text_color='darkolivegreen',fg_color='snow1',bg_color='darkolivegreen',
+                      corner_radius=20, width=300, height=70, font=("Arial", 22, 'italic', 'bold'))
+        e1.pack(padx=60, pady=10)
+        l3 = CTkLabel(master=f1, text="INGREDIENT", corner_radius=8, text_color='white',bg_color='darkolivegreen',fg_color='palegreen4',
+                      font=("Arial", 30, 'bold'), width=150, height=10)
+        l3.pack(padx=15, pady=1)
+        e2 = CTkEntry(master=f1, placeholder_text="Enter ingredient",text_color='darkolivegreen', fg_color='snow1',bg_color='darkolivegreen',
+                      corner_radius=20, width=300, height=70, font=("Arial", 22, 'italic', 'bold'))
+        e2.pack(padx=60, pady=10)
+        b1 = CTkButton(master=f1, text="ADD FOOD", corner_radius=8, text_color='white', bg_color="darkolivegreen", fg_color="palegreen4",
+                       width=300, height=60, font=("Arial", 30, 'bold'), command=new_food)
+        b1.pack(padx=60, pady=10)
+        b2 = CTkButton(master=f1, text="ADD INGREDIENT", text_color='white', corner_radius=8, bg_color="darkolivegreen", fg_color="palegreen4",
+                       width=300, height=60, font=("Arial", 30, 'bold'), command=new_ingredient)
+        b2.pack(padx=60, pady=10)
+        b3 = CTkButton(master=f1, text="DELETE FOOD", corner_radius=8, text_color='white', bg_color="darkolivegreen", fg_color="palegreen4", width=300,
+                       height=60, font=("Arial", 30, 'bold'), command=delete_food)
+        b3.pack(padx=60, pady=10)
+        b4 = CTkButton(master=f1, text="CLEAR", corner_radius=8, text_color='white', bg_color="darkolivegreen",
+                       fg_color="seagreen", width=250,
+                       height=60, font=("Arial", 30, 'bold'), command=clear_entrybox)
+        b4.pack(padx=60, pady=10)
+        l4 = CTkLabel(master=f2, text="FOOD DATABASE", text_color='white',fg_color='palegreen4', corner_radius=8, font=("Arial", 40, 'bold'), width=1000, height=60)
+        l4.pack(padx=60, pady=10)
+
+        tree = ttk.Treeview(f2)
+        tree_style = ttk.Style()
+
+        tree_style.theme_use('default')
+        tree['columns'] = ('Ingredients')
+        tree_style.configure("Treeview", background='lightgrey', foreground='green', fieldbackground='lightgrey',
+        borderwidth=0, font=("Arial", 30), padding=(0, 30), rowheight=50)
+        tree_style.map('Treeview', background=[('selected', 'darkseagreen')], foreground=[('selected', 'darkgreen')],
+                       rowheight=[('selected', 50)])
+
+    ##populate the treeview
+        for food, ingredients in food_dict.items():
+            parent_item = tree.insert('', 'end', text=str.title(food), values=(''))
+            for ingredient in ingredients:
+                tree.insert(parent_item, 'end', text='', values=(str.title(ingredient)))
+
+        tree.pack(fill='both', expand=True)
+
+        q.mainloop()
+
+    ######################################################################################################################
+    #******************************************HOMEPAGE*********************************************************************
+
+    root = Toplevel(mashle)
+    root.title(f"{name}'s Homepage")
+    # root.attributes('-fullscreen', True)
+
+    image_path = "D:/PL project/green.png"
+    pil_image = Image.open(image_path)
+    tk_image = ImageTk.PhotoImage(pil_image)
+
+    f1 = CTkFrame(root, width=800, height=500,bg_color="white",fg_color="white")
+    f1.pack(expand=True, fill='both',anchor="center")
+
+    image_label = CTkLabel(f1, image=tk_image)
+    image_label.pack(expand=True, fill="both")
+
+    f2 = CTkFrame(f1, width=1000, height=500, bg_color='darkseagreen',fg_color="white", corner_radius=20)
+    f2.place(relx=0.5, rely=0.5, anchor="center")
+    l1 = CTkLabel(f2, text="MY ALLERGY TRACKER", font=("arial", 45, 'bold'),text_color='white',bg_color='white', corner_radius=20,
+                  fg_color="palegreen4",width=500,height=100)
+    l1.pack(side="top", pady=40, padx=40,fill='x')
+    btn0 = CTkButton(master=f2, text="START", corner_radius=20, text_color='white',font=("Arial",25,'bold'),bg_color="white", fg_color="palegreen4",
+                     width=300, height=100,command=main_window)
+    btn0.pack(padx=50, pady=40)
+    btn2 = CTkButton(master=f2, text="MY ALLERGIES",text_color='white', corner_radius=20, font=("Arial",25,'bold'),bg_color="white", fg_color="palegreen4",
+                     width=300, height=100,command=a_database)
+    btn2.pack(padx=50, pady=40)
+    btn1 =CTkButton(master=f2, text="MY FOODS", text_color='white',corner_radius=20, font=("Arial",25,'bold'),bg_color="white", fg_color="palegreen4",
+                    width=300, height=100, command=f_database)
+    btn1.pack(padx=50, pady=40)
+
+
+    root.mainloop()
+
+##*************************PROFILE ASKER**********************************
+
+mashle = CTk()
+mashle.title("My allergy app")
+# mashle.attributes('-fullscreen', True)
+
+image_path = "D:/PL project/fuel1.png"
+pil_image = Image.open(image_path)
+tk_image = ImageTk.PhotoImage(pil_image)
+
+f1 = CTkFrame(mashle, width=800, height=500, bg_color="white", fg_color="white")
+f1.pack(expand=True, fill='both', anchor="center")
+
+image_label = CTkLabel(f1, image=tk_image)
+image_label.pack(expand=True, fill="both")
+
+f2 = CTkFrame(f1, width=1000, height=500, bg_color='darkseagreen', fg_color="white", corner_radius=20)
+f2.place(relx=0.5, rely=0.5, anchor="center")
+l2 = CTkLabel(f2, text="MY ALLERGY TRACKER", font=("arial", 45, 'bold'),text_color='white',bg_color='white', corner_radius=20,
+                  fg_color="palegreen4",width=500,height=100)
+l2.pack(side="top", pady=40, padx=40,fill='x')
+e1 = CTkEntry(f2, placeholder_text="ENTER PROFILE", font=("arial", 45, 'bold'), text_color='white', bg_color='white',
+              corner_radius=20,fg_color="palegreen4", width=500, height=100)
+e1.pack(side="top", pady=40, padx=40, fill='x')
+btn0 = CTkButton(master=f2, text="Enter", corner_radius=20, text_color='white',font=("Arial",30,'bold'),bg_color="white", fg_color="palegreen4",
+                     width=300, height=100,command=profile)
+btn0.pack(padx=50, pady=40)
+mashle.mainloop()
+
